@@ -1,0 +1,302 @@
+<style>
+    /* ... CSS DASAR SAMA SEPERTI SEBELUMNYA ... */
+    :root { --primary: #FFD700; --dark: #333; --light: #f4f4f9; --white: #fff; --grey: #888; }
+    body { touch-action: manipulation; font-family: 'Poppins', sans-serif; background: var(--light); margin: 0; padding-bottom: 70px; color: var(--dark); overflow-x: hidden;}
+    
+    /* LOGIN CSS */
+    #login-page { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; background: var(--primary); text-align: center; z-index:999; position:relative;}
+    .login-card { background: var(--white); padding: 30px; border-radius: 20px; width: 80%; max-width: 320px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+    .logo-img { max-width: 100px; margin-bottom: 20px;  }
+    /* LAYOUT UTAMA */
+    #main-app { display: none; }
+    .header { background: var(--primary); padding: 20px 20px 40px 20px; border-bottom-left-radius: 30px; border-bottom-right-radius: 30px; }
+    .role-badge { background: rgba(255,255,255,0.4); padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
+    
+    .saldo-card { background: var(--white); margin: -30px 20px 20px; padding: 20px; border-radius: 20px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+    
+    .content-area { padding: 0 20px; max-width: 500px; margin: 0 auto; display: none; }
+    .active-page { display: block; animation: fadeIn 0.3s; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* FORM INPUT */
+    input, select { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; }
+    button { width: 100%; padding: 12px; background: var(--dark); color: var(--primary); border: none; border-radius: 10px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+    
+    /* CHECKBOX BULAN (GRID 3 Kolom) */
+    .month-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px; }
+    .month-item { border: 1px solid #ddd; border-radius: 8px; padding: 10px; text-align: center; cursor: pointer; font-size: 12px; background: #fff; transition:0.2s; }
+    .month-item.selected { background: var(--primary); border-color: var(--primary); font-weight: bold; }
+
+    /* KARTU IURAN (GRID STATUS) */
+    .status-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 15px; }
+    .status-box { background: #fff; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); position: relative; }
+    .status-box .m-name { font-size: 12px; color: #888; margin-bottom: 5px; }
+    .status-box .icon { font-size: 24px; color: #ddd; }
+    
+    /* Warna Status */
+    .status-lunas { border: 2px solid #2ecc71; }
+    .status-lunas .icon { color: #2ecc71; }
+    .status-lunas .m-name { color: #2ecc71; font-weight:bold; }
+    
+    .status-pending { border: 2px solid #f39c12; }
+    .status-pending .icon { color: #f39c12; }
+
+    /* NAV BAWAH */
+    .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; height: 60px; background: var(--white); display: flex; justify-content: space-around; align-items: center; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); border-top-left-radius: 20px; border-top-right-radius: 20px; }
+    .nav-item { text-align: center; color: var(--grey); font-size: 10px; cursor: pointer; flex: 1; }
+    .nav-item i { font-size: 20px; display: block; margin-bottom: 4px; }
+    .nav-item.active { color: #f39c12; }
+
+    /* CSS UNTUK REKAP KATEGORI */
+    .rekap-scroll {
+      display: flex;
+      gap: 10px;
+      overflow-x: auto; /* Bisa digeser ke samping */
+      padding-bottom: 5px;
+      margin-bottom: 20px;
+      margin-top: -10px;
+      scrollbar-width: none; /* Sembunyikan scrollbar (Firefox) */
+    }
+    .rekap-scroll::-webkit-scrollbar { display: none; /* Sembunyikan scrollbar (Chrome) */ }
+    
+    .stat-card {
+      min-width: 120px;
+      background: var(--white);
+      padding: 10px;
+      border-radius: 12px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+      border-left: 4px solid var(--primary); /* Aksen Kuning */
+    }
+    .stat-label { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-val { font-size: 14px; font-weight: 700; color: var(--dark); margin-top: 2px; }
+
+    /* --- CSS BARU: MONTH CHIPS (LEBIH SIMPLE) --- */
+    .month-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center; /* Tengah */
+      margin-bottom: 15px;
+    }
+    
+    .month-chip {
+      padding: 8px 16px;
+      border: 1px solid #e0e0e0;
+      border-radius: 50px; /* Bentuk Lonjong */
+      font-size: 12px;
+      color: #666;
+      background: #fff;
+      cursor: pointer;
+      transition: 0.2s;
+      flex-grow: 1; /* Agar rapi mengisi ruang */
+      text-align: center;
+      max-width: 60px;
+    }
+
+    /* Efek saat dipilih */
+    .month-chip.selected {
+      background: var(--dark);
+      color: var(--primary);
+      border-color: var(--dark);
+      font-weight: 600;
+      transform: scale(1.05); /* Sedikit membesar */
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+
+    /* Chip yang sudah lunas/pending */
+    .month-chip.locked {
+      background: #ececec;
+      color: #bbb;
+      border-color: #ddd;
+      cursor: not-allowed;
+      text-decoration: line-through; /* Opsional: coret teks */
+    }
+
+    /* Cegah Auto Zoom di Smartphone */
+    input, select, textarea {
+      font-size: 16px !important; /* Minimal 16px agar tidak auto-zoom */
+    }
+
+    @media screen and (max-width: 480px) {
+      input, select {
+        padding: 10px !important;
+      }
+      
+      /* Jika 16px terasa terlalu besar secara visual, 
+         kita bisa gunakan trik transform scale untuk mengecilkan tampilannya 
+         tanpa memicu sensor zoom browser */
+      .login-card input {
+        font-size: 16px; 
+      }
+    }
+
+    /* Custom SweetAlert2 untuk Mobile */
+    .swal2-popup {
+      font-size: 0.8rem !important; /* Perkecil font keseluruhan alert */
+      width: 85% !important;        /* Lebar alert 85% dari layar HP */
+      max-width: 350px !important;  /* Batas maksimal lebar */
+      border-radius: 20px !important;
+    }
+
+    .swal2-title {
+      font-size: 1.2rem !important; /* Ukuran judul lebih proporsional */
+    }
+
+    .swal2-styled {
+      padding: 10px 20px !important; /* Ukuran tombol lebih pas untuk jempol */
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+/* --- PERBAIKAN ICON TOAST AGAR SIMETRIS --- */
+    .swal2-toast {
+      padding: 10px 15px !important;
+      display: flex !important;
+      align-items: center !important; /* Menjaga semua konten di tengah secara vertikal */
+      gap: 10px !important;
+    }
+
+    .swal2-toast .swal2-icon {
+      width: 24px !important;
+      height: 24px !important;
+      min-width: 24px !important; /* Mencegah icon gepeng saat teks panjang */
+      margin: 0 !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      border-width: 2px !important; /* Garis icon lebih tipis agar rapi */
+    }
+
+    /* Menghilangkan margin bawaan yang bikin tidak simetris */
+    .swal2-toast .swal2-title {
+      margin: 0 !important;
+      padding: 0 !important;
+      font-size: 13px !important;
+      display: flex !important;
+      align-items: center !important;
+    }
+
+    /* Mengatur ukuran centang/silang di dalam icon */
+    .swal2-icon.swal2-success [class^=swal2-success-line] { height: 2px !important; }
+    .swal2-icon.swal2-error [class^=swal2-x-mark-line] { height: 2px !important; }
+
+    /* --- CSS SEARCH BAR SIMETRIS --- */
+    .search-wrapper {
+      position: relative;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+    }
+    
+    .search-wrapper i {
+      position: absolute;
+      left: 15px;
+      color: #aaa;
+      font-size: 14px;
+    }
+    
+    #searchApproval {
+      width: 100%;
+      padding: 12px 12px 12px 40px !important; /* Padding kiri lebih besar untuk icon */
+      border-radius: 12px;
+      border: 1px solid #eee;
+      background: #fff;
+      font-size: 14px;
+      color: var(--dark); /* Warna font serasi */
+      outline: none;
+      transition: 0.3s;
+    }
+
+    #searchApproval:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(255, 215, 0, 0.1);
+    }
+
+    /* Style Label Satu Baris */
+    .label-info-row {
+      font-size: 10px;
+      color: #888;
+      margin-top: 4px;
+      display: block;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    .badge-kat {
+      color: #444;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    /* Style untuk Badge Bulan di Kartu Approval */
+    .month-badge-container {
+      display: flex;
+      flex-wrap: wrap; /* Agar otomatis pindah baris jika banyak bulan */
+      gap: 4px;
+      margin-top: 6px;
+    }
+
+    .month-badge {
+      background: #e8f4fd;
+      color: #2980b9;
+      padding: 2px 10px;
+      border-radius: 50px; /* Membuat bentuk bulat lonjong */
+      font-size: 10px;
+      font-weight: 600;
+      border: 1px solid #cbe4f6;
+      white-space: nowrap;
+    }
+
+    .info-row-main {
+      font-size: 11px;
+      color: #888;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    /* Tambahkan ini di bagian CSS */
+    .avatar-initial {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      font-weight: 700;
+      color: #fff;
+      background-color: var(--dark); /* Bisa diganti warna lain */
+      font-family: sans-serif;
+    }
+
+    /* --- CUSTOM SWEETALERT COMPACT STYLE --- */
+    
+    
+
+    /* 3. Perkecil Input Field */
+    .swal2-input {
+      height: 35px !important;     /* Tinggi input dikurangi */
+      font-size: 12px !important;  /* Font dalam input diperkecil */
+      margin: 5px auto !important; /* Jarak antar input dirapatkan */
+      padding: 0 10px !important;
+      border-radius: 8px !important;
+    }
+
+    /* 4. Perkecil Tombol Action (Simpan/Batal) */
+    .swal2-actions {
+      margin-top: 15px !important;
+      gap: 5px !important;
+    }
+    
+    
+    /* 5. Perkecil Pesan Error/Validasi */
+    .swal2-validation-message {
+      font-size: 11px !important;
+      padding: 5px !important;
+      margin-top: 5px !important;
+    }
+
+  </style>

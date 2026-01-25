@@ -1,0 +1,884 @@
+<script>
+    // --- SETTING HARGA ---
+    var HARGA_PER_BULAN = 50000; // HARUS SAMA DENGAN CODE.GS
+
+     // Warna standar aplikasi
+      const COLOR_CANCEL = '#aaaaaa'; // Abu-abu redup
+      const COLOR_OK = '#333333';     // Hitam/Gelap (Atau sesuaikan dengan warna primer)
+      const COLOR_DANGER = '#e74c3c'; // Merah
+    
+    var currentUser = null;
+    var selectedMonths = []; // Menyimpan index bulan yg dipilih [1, 2, 5]
+
+    // --- INISIALISASI ---
+    var savedUser = localStorage.getItem('luatliat_user_v3');
+    if (savedUser) { currentUser = JSON.parse(savedUser); showMainApp(); }
+
+    // --- GANTI FUNGSI INI DI javascript.html ---
+
+    function renderMonthSelector(lockedMonths = []) {
+      var container = document.getElementById('monthGrid');
+      container.innerHTML = "";
+      var months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agt", "Sep", "Okt", "Nov", "Des"];
+      
+      // DEBUG: Cek di console apa isi lockedMonths
+      console.log("Locked Months:", lockedMonths);
+
+      months.forEach((m, index) => {
+        var idx = index + 1; // 1 = Jan, 2 = Feb, dst
+        var div = document.createElement('div');
+        div.className = 'month-chip';
+        
+        // LOGIKA KUNCI:
+        // Cek apakah 'idx' ada di dalam array lockedMonths
+        // Kita gunakan loose comparison (filter) untuk jaga-jaga beda tipe data (string vs number)
+        var isLocked = lockedMonths.some(val => parseInt(val) === idx);
+
+        if (isLocked) {
+          // JIKA DIKUNCI (SUDAH BAYAR / PENDING)
+          div.classList.add('locked'); // Pastikan CSS .locked ada
+          div.style.background = "#e0e0e0"; // Abu-abu
+          div.style.color = "#999";
+          div.style.cursor = "not-allowed";
+          div.style.border = "1px solid #ccc";
+          div.innerHTML = m + ' <i class="fas fa-check" style="font-size:10px; margin-left:3px;"></i>';
+          
+          // PENTING: Jangan beri event onclick
+          div.onclick = null; 
+        } else {
+          // JIKA TERBUKA (BELUM BAYAR / DITOLAK)
+          div.innerText = m;
+          div.onclick = function() { toggleMonth(div, idx); };
+        }
+        
+        container.appendChild(div);
+      });
+    }
+
+    function toggleMonth(el, index) {
+      if (selectedMonths.includes(index)) {
+        // Unselect
+        selectedMonths = selectedMonths.filter(i => i !== index);
+        el.classList.remove('selected');
+      } else {
+        // Select
+        selectedMonths.push(index);
+        el.classList.add('selected');
+      }
+      // Hitung Total
+      var total = selectedMonths.length * HARGA_PER_BULAN;
+      document.getElementById('totalBayarIuran').innerText = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(total);
+    }
+
+    function toggleInputMode() {
+      var cat = document.getElementById('catSelect').value;
+      var jenis = document.querySelector('input[name="jenis"]:checked').value;
+      
+      var boxIuran = document.getElementById('input-iuran-box');
+      var boxManual = document.getElementById('input-manual-box');
+      var inpJumlah = document.getElementById('inpJumlah');
+
+      // Jika kategori Iuran DAN jenis Masuk -> Tampilkan Checkbox Bulan
+      if (cat === 'Iuran' && jenis === 'Masuk') {
+        boxIuran.style.display = 'block';
+        boxManual.style.display = 'none';
+        inpJumlah.required = false;
+      } else {
+        boxIuran.style.display = 'none';
+        boxManual.style.display = 'block';
+        inpJumlah.required = true;
+      }
+    }
+
+    // --- LOGIC KIRIM DATA ---
+    function kirimData() {
+      var cat = document.getElementById('catSelect').value;
+      var jenis = document.querySelector('input[name="jenis"]:checked').value;
+      
+      var nominal = 0;
+      var bulanString = "";
+      
+      // Validasi Iuran
+      if (cat === 'Iuran' && jenis === 'Masuk') {
+        if (selectedMonths.length === 0) { alert("Pilih minimal 1 bulan!"); return; }
+        nominal = selectedMonths.length * HARGA_PER_BULAN;
+        bulanString = selectedMonths.join(","); // "1,2,3"
+      } else {
+        // Validasi Manual
+        nominal = document.getElementById('inpJumlah').value;
+        if (!nominal) { toast('warning', 'Isi nominal dulu ya!'); return; }
+      }
+
+      var btn = document.getElementById('btnSimpan');
+      var loading = document.getElementById('loading');
+      btn.style.display = 'none'; loading.style.display = 'block';
+
+      var tahunSekarang = new Date().getFullYear();
+
+      var data = {
+        jenis: jenis,
+        kategori: cat,
+        jumlah: nominal,
+        keterangan: document.getElementById('inpKet').value,
+        user_name: currentUser.nama,
+        email: currentUser.email,
+        bulan_dipilih: bulanString, // Kirim data bulan
+        total_bulan: selectedMonths.length,
+        tahun_iuran: tahunSekarang // <-- Default Tahun Ini
+      };
+
+      google.script.run.withSuccessHandler(function(res) {
+        document.getElementById('formTransaksi').reset();
+        // Reset Selector Bulan
+        selectedMonths = [];
+        // renderMonthSelector();
+        refreshMonthSelector();
+        document.getElementById('totalBayarIuran').innerText = "Rp 0";
+        document.getElementById('masuk').checked = true;
+        
+        loading.style.display = 'none'; btn.style.display = 'block';
+        pesanSukses(res);
+        updateSaldo();
+      }).simpanTransaksi(data);
+    }
+
+    // --- LOGIC KARTU STATUS IURAN ---
+    function loadStatusIuran() {
+      // ... kode persiapan ...
+      var tahun = document.getElementById('tahunFilter').value;
+      var container = document.getElementById('statusGridContainer');
+      container.innerHTML = '<p style="grid-column: span 3; text-align:center;">Mengambil data...</p>';
+
+      google.script.run.withSuccessHandler(function(statusArray) {
+        container.innerHTML = ""; 
+        var months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agt", "Sep", "Okt", "Nov", "Des"];
+        
+        for (var i = 0; i < months.length; i++) {
+          var idx = i + 1;
+          var dataBulan = statusArray[idx]; // Sekarang ini adalah Object atau Null
+          
+          // Default (Belum Bayar)
+          var status = 0; 
+          var tglBayar = ""; 
+
+          // Cek isi dataBulan
+          if (dataBulan) {
+             status = dataBulan.code; // 1 atau 2
+             tglBayar = dataBulan.date; // "05 Jan"
+          }
+          
+          var icon = "fa-times-circle"; 
+          var classPlus = "";
+          var subText = ""; // Variable untuk teks tanggal kecil
+
+          if (status === 2) { 
+             icon = "fa-check-circle"; 
+             classPlus = "status-lunas";
+             // Tampilkan tanggal bayar jika lunas
+             subText = `<div style="font-size:9px; margin-top:2px; opacity:0.8;">${tglBayar}</div>`;
+          } else if (status === 1) {
+             icon = "fa-clock";
+             classPlus = "status-pending";
+             subText = `<div style="font-size:9px; margin-top:2px;">Proses</div>`;
+          }
+
+          var html = `
+            <div class="status-box ${classPlus}" style="flex-direction:column; justify-content:center; align-items:center; text-align:center;">
+              <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+                 <div class="m-name">${months[i]}</div>
+                 <i class="fas ${icon} icon"></i>
+              </div>
+              ${subText} 
+            </div>
+          `;
+          container.innerHTML += html;
+        }
+      })
+      .getStatusIuran(currentUser.email, currentUser.nama, tahun);
+    }
+
+    // --- NAVIGASI & LOGIN (STANDARD) ---
+    function handleLogin(e) { /* Sama seperti sebelumnya... */ 
+      e.preventDefault();
+      var btn = document.getElementById('btnLogin');
+      var errorMsg = document.getElementById('loginError');
+      var form = document.getElementById('formLogin');
+      btn.innerText = "Loading..."; btn.disabled = true; errorMsg.style.display = 'none';
+      google.script.run.withSuccessHandler(function(res) {
+        if (res.status === 'sukses') {
+          currentUser = { nama: res.nama, email: res.email, role: res.role };
+          localStorage.setItem('luatliat_user_v3', JSON.stringify(currentUser));
+          showMainApp();
+        } else {
+          errorMsg.style.display = 'block'; errorMsg.innerText = res.pesan;
+          btn.innerText = "Masuk"; btn.disabled = false;
+        }
+      }).cekLogin(form);
+    }
+    
+    function showMainApp() {
+        document.getElementById('login-page').style.display = 'none';
+        document.getElementById('main-app').style.display = 'block';
+        
+        // Update Profil Header
+        document.getElementById('userNameDisplay').innerText = currentUser.nama;
+        document.getElementById('profileName').innerText = currentUser.nama;
+        document.getElementById('userRoleDisplay').innerText = currentUser.role.toUpperCase();
+        document.getElementById('profileRole').innerText = currentUser.role.toUpperCase();
+        
+        renderUserAvatar(currentUser.nama);
+
+        // --- LOGIKA HAK AKSES (ROLE MANAGEMENT) ---
+        var role = currentUser.role.toLowerCase();
+        
+        // Ambil elemen-elemen penting
+        var navHome = document.getElementById('nav-home');       // Menu Bawah: Bayar
+        var navApproval = document.getElementById('nav-approval');// Menu Bawah: Approval
+        var formInput = document.getElementById('form-input-container'); // Form Input Uang (Kotak Putih)
+        var containerJenis = document.getElementById('containerJenis'); // Radio Button Masuk/Keluar
+        var statsPanel = document.getElementById('panel-monitor');
+
+
+        // 1. Reset ke Default (Tampilkan Semua)
+        if(navHome) navHome.style.display = 'flex';
+        if(navApproval) navApproval.classList.add('hidden'); // Default hidden
+        if(formInput) formInput.style.display = 'block';
+        if(containerJenis) containerJenis.style.display = 'none'; // Default hidden
+        // if(statsPanel) containerJenis.style.display = 'none'; // Default hidden
+
+        // 2. ATURAN KHUSUS PER ROLE
+        
+        if (role === 'superadmin') {
+          // --- SUPERADMIN (PENGAWAS) ---
+          // Menu Home TETAP ADA (biar bisa lihat Kartu Iuran & Saldo)
+          // Menu Approval HILANG (Bendahara only)
+          if(navApproval) navApproval.classList.add('hidden');
+          
+          // FORM INPUT HILANG (Superadmin tidak boleh input uang)
+          if(formInput) formInput.style.display = 'none';
+
+          if(statsPanel) statsPanel.style.display = 'block';
+
+          
+          // Default Masuk ke Home
+          switchTab('home');
+        } 
+        else if (role === 'bendahara') {
+          // --- BENDAHARA (EKSEKUTOR) ---
+          // Menu Approval MUNCUL
+          if(navApproval) navApproval.classList.remove('hidden');
+          
+          // Form Input ADA
+          if(formInput) formInput.style.display = 'block';
+          
+          // Pilihan Jenis (Masuk/Keluar) MUNCUL
+          if(containerJenis) containerJenis.style.display = 'flex';
+
+          if(statsPanel) statsPanel.style.display = 'block';
+
+          
+          switchTab('home');
+        } 
+        else {
+          // --- MEMBER (USER BIASA) ---
+          // Menu Approval HILANG
+          // Form Input ADA (Untuk bayar iuran sendiri)
+          if(formInput) formInput.style.display = 'block';
+          
+          // Pilihan Jenis HILANG (Hanya bisa Bayar Masuk)
+          if(containerJenis) containerJenis.style.display = 'none';
+
+          if(statsPanel) statsPanel.style.display = 'none';
+
+          switchTab('home');
+        }
+
+        // Load Data
+        updateSaldo();
+        loadRekap(); 
+        
+        // Load Config
+        google.script.run.withSuccessHandler(function(config) {
+          if (config.hargaIuran) { HARGA_PER_BULAN = config.hargaIuran; }
+
+          var filterTahun = document.getElementById('tahunFilter');
+          if (filterTahun) {
+            filterTahun.innerHTML = "";
+            config.years.forEach(y => {
+              var opt = document.createElement("option");
+              opt.value = y; opt.text = y;
+              filterTahun.appendChild(opt);
+            });
+            filterTahun.value = config.currentYear;
+          }
+          
+          // SEMUA ROLE (Termasuk Superadmin) Tetap Load Data Iuran
+          // Bedanya Superadmin hanya melihat, tidak bisa mengedit lewat form
+          loadStatusIuran();
+          refreshMonthSelector();
+          loadDashboardStats(); 
+
+        }).getAppConfig();
+    }
+
+    function handleLogout() {
+      // Menampilkan jendela konfirmasi SweetAlert2
+      Swal.fire({
+        title: 'Apakah anda yakin?',
+        text: "Anda akan keluar dari aplikasi LuatLiat.",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: COLOR_OK,
+        cancelButtonColor: COLOR_CANCEL, // Abu-abu redup
+        confirmButtonText: 'Ya, Keluar!',
+        cancelButtonText: 'Batal',
+        reverseButtons: true
+      }).then((result) => {
+        // Jika user menekan tombol "Ya, Keluar!"
+        if (result.isConfirmed) {
+          
+          // 1. Hapus Data Sesi
+          localStorage.removeItem('luatliat_user_v3'); 
+          
+          // 2. Reset Variabel Global
+          currentUser = null;
+          selectedMonths = []; 
+          
+          // 3. Bersihkan Form
+          document.getElementById('formLogin').reset();
+          if(document.getElementById('formTransaksi')) document.getElementById('formTransaksi').reset();
+          
+          // 4. Reset Tampilan
+          document.getElementById('loginError').style.display = 'none';
+          document.getElementById('btnLogin').innerText = "Masuk";
+          document.getElementById('btnLogin').disabled = false;
+          
+          // 5. Kembali ke Halaman Login (Tanpa reload agar tidak blank)
+          document.getElementById('main-app').style.display = 'none';
+          document.getElementById('login-page').style.display = 'flex';
+
+          // Reset Menu Aktif ke Home untuk sesi berikutnya
+          document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+          document.querySelectorAll('.content-area').forEach(p => p.classList.remove('active-page'));
+
+          // Tampilkan pesan perpisahan kecil (Optional)
+          toast('info', 'Anda telah logout.');
+        }
+      })
+    }
+
+    function switchTab(page, el) {
+      // 1. Sembunyikan semua konten area
+      document.querySelectorAll('.content-area').forEach(p => p.classList.remove('active-page'));
+      
+      // 2. Munculkan area yang dipilih
+      const targetPage = document.getElementById('page-' + page);
+      if (targetPage) targetPage.classList.add('active-page');
+      
+      // 3. Update tampilan menu bawah (Bottom Nav)
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      
+      // Jika el ada (diklik manual), beri class active. 
+      // Jika tidak ada (panggilan sistem), cari elemen nav yang sesuai.
+      if (el) {
+        el.classList.add('active');
+      } else {
+        // Cari menu nav berdasarkan fungsi (misal menu pertama untuk home)
+        const navItems = document.querySelectorAll('.nav-item');
+        if (page === 'home') navItems[0].classList.add('active');
+      }
+
+      // 4. Load data spesifik halaman
+      if (page === 'approval' && typeof loadApprovalList === 'function') loadApprovalList();
+      if (page === 'history') loadStatusIuran();
+    }
+
+    function updateSaldo() { 
+      google.script.run.withSuccessHandler(function(val) { document.getElementById('saldoDisplay').innerText = val; }).getSaldo(); 
+    }
+
+    // --- LOAD REKAP PEMASUKAN ---
+    function loadRekap() {
+      google.script.run.withSuccessHandler(function(data) {
+        var container = document.getElementById('rekapContainer');
+        container.innerHTML = ""; // Bersihkan loading text
+
+        var rincian = data.rincian;
+        var formatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 });
+
+        // Cek jika data kosong
+        if (Object.keys(rincian).length === 0) {
+           container.innerHTML = '<span style="font-size:10px; color:#999; padding:0 5px;">Belum ada pemasukan.</span>';
+           return;
+        }
+
+        // Loop setiap kategori yang ada (Iuran, Donasi, dll)
+        for (var kat in rincian) {
+          var nominal = rincian[kat];
+          
+          var html = `
+            <div class="stat-card">
+              <div class="stat-label">Total ${kat}</div>
+              <div class="stat-val">${formatter.format(nominal)}</div>
+            </div>
+          `;
+          container.innerHTML += html;
+        }
+
+        // Opsional: Tambahkan Kartu TOTAL SEMUA di paling depan
+        var totalHtml = `
+            <div class="stat-card" style="border-left-color: #2ecc71;">
+              <div class="stat-label">Total Masuk</div>
+              <div class="stat-val">${formatter.format(data.total)}</div>
+            </div>
+        `;
+        container.insertAdjacentHTML('afterbegin', totalHtml);
+
+      }).getRekapPemasukan(currentUser.nama);
+    }
+
+    function refreshMonthSelector() {
+        // 1. Ambil tahun dari Filter (dropdown) jika ada, agar tidak selalu tahun ini
+        var filterEl = document.getElementById('tahunFilter');
+        var tahunSekarang = filterEl ? filterEl.value : new Date().getFullYear();
+
+        google.script.run.withSuccessHandler(function(locked) {
+          renderMonthSelector(locked);
+        })
+        // PERBAIKAN DISINI:
+        // Kirim 3 Parameter: (Email, Nama, Tahun) agar backend bisa mendeteksi dengan akurat
+        .getLockedMonths(currentUser.email, currentUser.nama, tahunSekarang);
+    }
+
+    // Fungsi Helper untuk Alert Cantik
+    function toast(icon, title) {
+      const Toast = Swal.mixin({
+        toast: true,
+        position: 'top', // Ubah ke 'top' agar center di HP
+        showConfirmButton: false,
+        timer: 2500, // Sedikit lebih cepat agar tidak mengganggu
+        timerProgressBar: true,
+        background: '#333', // Warna gelap agar kontras dengan teks putih
+        color: '#fff'       // Warna teks putih
+      });
+      Toast.fire({
+        icon: icon,
+        title: title
+      });
+    }
+
+     
+
+    function pesanSukses(pesan) {
+      Swal.fire({
+        icon: 'success',
+        title: 'Berhasil!',
+        text: pesan,
+        confirmButtonColor: COLOR_OK
+      });
+    }
+
+
+    // Global variable untuk menyimpan data antrian agar bisa difilter tanpa request ulang ke server
+    let allPendingData = [];
+
+    function loadApprovalList() {
+      var container = document.getElementById('approval-list');
+      if (!container) return;
+      
+      google.script.run.withSuccessHandler(function(list) {
+        allPendingData = list; // Simpan data ke variabel global
+        renderApprovalCards(list);
+      }).getPendingTransactions();
+    }
+
+    function renderApprovalCards(list) {
+        var container = document.getElementById('approval-list');
+        container.innerHTML = "";
+        
+        if (list.length === 0) {
+          container.innerHTML = '<p style="text-align:center; color:#999; margin-top:20px;">Tidak ada antrian.</p>';
+          return;
+        }
+
+        const namaBulan = ["", "Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agt", "Sep", "Okt", "Nov", "Des"];
+
+        list.forEach(item => {
+          // Memproses Chips Bulan
+          let monthBadges = "";
+          if (item.kategori === "Iuran" && item.periode) {
+            let bulanArr = item.periode.split(',').map(b => b.trim());
+            
+            monthBadges = '<div class="month-badge-container">';
+            bulanArr.forEach(bIdx => {
+              let nama = namaBulan[parseInt(bIdx)] || bIdx;
+              monthBadges += `<span class="month-badge">${nama}</span>`;
+            });
+            monthBadges += '</div>';
+          }
+
+          var card = `
+            <div class="stat-card approval-item" style="margin-bottom:12px; border-left: 4px solid var(--primary); padding:15px; background:#fff; border-radius:12px;">
+              <div style="display:flex; justify-content:space-between; align-items:start;">
+                <div style="flex:1;">
+                  <div class="search-name" style="font-weight:700; font-size:14px; color:var(--dark);">${item.nama}</div>
+                  
+                  <div class="info-row-main">
+                    <span>${item.tanggal}</span>
+                    <span>•</span>
+                    <span style="font-weight:700; color:#444; text-transform:uppercase;">${item.kategori}</span>
+                  </div>
+                  
+                  ${monthBadges}
+                </div>
+                
+                <div class="search-nominal" style="font-weight:700; color:#2ecc71; font-size:14px;">
+                  Rp ${item.nominal.toLocaleString('id-ID')}
+                </div>
+              </div>
+              
+              <div style="font-size:11px; margin:10px 0; color:#666; background:#f9f9f9; padding:8px; border-radius:8px; border:1px solid #eee;">
+                <strong>Ket:</strong> ${item.keterangan || '-'}
+              </div>
+              
+              <div style="display:flex; gap:8px;">
+                <button onclick="prosesApprove(${item.row}, '${item.nama}')" style="background:#2ecc71; flex:1; padding:10px; border-radius:10px; font-size:12px; font-weight:600; color:#fff; border:none;">Approve</button>
+                <button onclick="prosesTolak(${item.row}, '${item.nama}')" style="background:#e74c3c; flex:1; padding:10px; border-radius:10px; font-size:12px; font-weight:600; color:#fff; border:none;">Tolak</button>
+              </div>
+            </div>
+          `;
+          container.innerHTML += card;
+        });
+      }
+
+    // Fungsi Pencarian (Filter)
+    function filterApproval() {
+      let val = document.getElementById('searchApproval').value.toLowerCase();
+      let filtered = allPendingData.filter(item => {
+        return item.nama.toLowerCase().includes(val) || item.nominal.toString().includes(val);
+      });
+      renderApprovalCards(filtered);
+    }
+
+
+    function prosesApprove(row, nama) {
+      // 1. Tangkap elemen tombol yang diklik SEBELUM masuk ke SweetAlert
+      const btnKlik = event.currentTarget; 
+      const card = btnKlik.closest('.stat-card');
+      const buttons = card.querySelectorAll('button');
+
+      Swal.fire({
+        title: 'Konfirmasi',
+        text: "Approve pembayaran dari " + nama + "?",
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Ya, Approve!',
+        cancelButtonText: 'Batal',
+        confirmButtonColor: '#2ecc71',
+        cancelButtonColor: COLOR_CANCEL 
+      }).then((result) => {
+        if (result.isConfirmed) {
+          
+          // 2. Gunakan referensi variabel yang sudah kita simpan
+          buttons.forEach(btn => {
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+            btn.style.cursor = 'not-allowed';
+          });
+          
+          btnKlik.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memproses...';
+
+          // 3. Jalankan fungsi Backend
+          google.script.run
+            .withSuccessHandler(function(res) {
+              toast('success', res);
+              loadApprovalList(); 
+              updateSaldo();
+            })
+            .withFailureHandler(function(err) {
+              // Kembalikan tombol jika gagal
+              buttons.forEach(btn => {
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.style.cursor = 'pointer';
+              });
+              btnKlik.innerHTML = 'Approve';
+              toast('error', 'Gagal memproses transaksi');
+            })
+            .updateStatusTransaksi(row, "Completed", currentUser.nama, currentUser.email);
+        }
+      });
+    }
+
+    function prosesTolak(row, namaMember) {
+      const btnKlik = event.currentTarget;
+      const card = btnKlik.closest('.stat-card');
+      const buttons = card.querySelectorAll('button');
+
+      Swal.fire({
+        title: 'Tolak Pembayaran?',
+        input: 'text',
+        inputPlaceholder: 'Alasan penolakan...',
+        showCancelButton: true,
+        confirmButtonText: 'Tolak',
+        cancelButtonText: 'Batal',
+        confirmButtonColor: '#e74c3c',
+        cancelButtonColor: COLOR_CANCEL
+      }).then((result) => {
+        if (result.isConfirmed) {
+          let alasan = result.value || "Data tidak valid";
+          
+          buttons.forEach(btn => { btn.disabled = true; btn.style.opacity = '0.5'; });
+
+          // KIRIM: baris, status, NAMA BENDAHARA, alasan
+          google.script.run
+            .withSuccessHandler(function(res) {
+              toast('error', 'Transaksi Ditolak');
+              loadApprovalList();
+            })
+            .updateStatusTransaksi(row, "Rejected", currentUser.nama, currentUser.email, alasan);
+        }
+      });
+    }
+
+    // --- FITUR GANTI PASSWORD ---
+    function handleGantiPassword() {
+      Swal.fire({
+        title: 'Ganti Password',
+        // HTML dirapikan: Label diberi style block & margin
+        html: `
+          <div style="text-align:left; margin-bottom:5px;">
+            <label style="font-size:12px; font-weight:600; color:#555; margin-left:5px;">Password Lama</label>
+            <input type="password" id="swal-pass-lama" class="swal2-input" placeholder="Password saat ini" style="width:100%; box-sizing:border-box;">
+          </div>
+          
+          <div style="text-align:left; margin-bottom:5px;">
+            <label style="font-size:12px; font-weight:600; color:#555; margin-left:5px;">Password Baru</label>
+            <input type="password" id="swal-pass-baru" class="swal2-input" placeholder="Minimal 6 karakter" style="width:100%; box-sizing:border-box;">
+          </div>
+          
+          <div style="text-align:left; margin-bottom:0;">
+            <label style="font-size:12px; font-weight:600; color:#555; margin-left:5px;">Ulangi Password</label>
+            <input type="password" id="swal-pass-konf" class="swal2-input" placeholder="Ketik ulang password" style="width:100%; box-sizing:border-box;">
+          </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Simpan',
+        cancelButtonText: 'Batal',
+        confirmButtonColor: COLOR_OK,
+        cancelButtonColor: COLOR_CANCEL,
+        reverseButtons: true, // Tombol Batal di kiri, Simpan di kanan (lebih UX friendly)
+        
+        allowOutsideClick: false, 
+        allowEscapeKey: false,
+        showLoaderOnConfirm: true,
+
+        preConfirm: () => {
+          const passLama = document.getElementById('swal-pass-lama').value;
+          const passBaru = document.getElementById('swal-pass-baru').value;
+          const passKonf = document.getElementById('swal-pass-konf').value;
+          
+          if (!passLama || !passBaru || !passKonf) {
+            Swal.showValidationMessage('Semua kolom harus diisi'); return false;
+          }
+          if (passBaru !== passKonf) {
+            Swal.showValidationMessage('Password konfirmasi tidak cocok'); return false;
+          }
+          if (passBaru.length < 6) { 
+            Swal.showValidationMessage('Password minimal 6 karakter'); return false;
+          }
+
+          // Lock Input (Visual Readonly)
+          const inputs = [
+            document.getElementById('swal-pass-lama'),
+            document.getElementById('swal-pass-baru'),
+            document.getElementById('swal-pass-konf')
+          ];
+          
+          inputs.forEach(el => { el.disabled = true; el.style.background = '#f5f5f5'; el.style.color = '#999'; });
+
+          return new Promise((resolve) => {
+            google.script.run
+              .withSuccessHandler((res) => {
+                if (res === "sukses") resolve("sukses");
+                else {
+                  // Unlock jika error
+                  inputs.forEach(el => { el.disabled = false; el.style.background = '#fff'; el.style.color = '#333'; });
+                  Swal.showValidationMessage(res); resolve(false);
+                }
+              })
+              .withFailureHandler((err) => {
+                 inputs.forEach(el => { el.disabled = false; el.style.background = '#fff'; });
+                 Swal.showValidationMessage("Koneksi Error"); resolve(false);
+              })
+              .prosesGantiPassword(currentUser.email, passLama, passBaru);
+          });
+        }
+      }).then((result) => {
+        if (result.isConfirmed && result.value === "sukses") {
+          Swal.fire({
+            icon: 'success', title: 'Berhasil', text: 'Silakan login kembali.', allowOutsideClick: false
+          }).then(() => { localStorage.removeItem('luatliat_user_v3'); 
+          forceShowLogin();
+          });
+        }
+      });
+    }
+
+    function getInitials(name) {
+      if (!name) return "U";
+      const parts = name.trim().split(" ");
+      let initials = parts[0].charAt(0);
+      if (parts.length > 1) {
+        initials += parts[parts.length - 1].charAt(0); // Ambil huruf pertama dari kata terakhir
+      }
+      return initials.toUpperCase();
+    }
+
+
+    function renderUserAvatar(nama) {
+      const inisial = getInitials(nama);
+      
+      // Warna background acak agar tidak bosan (Opsional, bisa dihapus jika ingin 1 warna saja)
+      const colors = ['#e74c3c', '#8e44ad', '#2980b9', '#16a085', '#d35400', '#2c3e50'];
+      const randomColor = colors[Math.floor(Math.random() * colors.length)];
+      
+      // HTML untuk Avatar Header (Kecil - Font size 16px)
+      // const htmlHeader = `<div class="avatar-initial" style="background:${randomColor}; font-size:16px;">${inisial}</div>`;
+      
+      // HTML untuk Avatar Profile (Besar - Font size 32px)
+      const htmlProfile = `<div class="avatar-initial" style="background:${randomColor}; font-size:32px;">${inisial}</div>`;
+
+      // Inject ke Element
+      // const elHeader = document.getElementById('headerAvatar');
+      const elProfile = document.getElementById('profileAvatar');
+      
+      // if(elHeader) elHeader.innerHTML = htmlHeader;
+      if(elProfile) elProfile.innerHTML = htmlProfile;
+    }
+
+    function forceShowLogin(){
+       document.getElementById('formLogin').reset();
+          if(document.getElementById('formTransaksi')) document.getElementById('formTransaksi').reset();
+          
+          // 4. Reset Tampilan
+          document.getElementById('loginError').style.display = 'none';
+          document.getElementById('btnLogin').innerText = "Masuk";
+          document.getElementById('btnLogin').disabled = false;
+          
+          // 5. Kembali ke Halaman Login (Tanpa reload agar tidak blank)
+          document.getElementById('main-app').style.display = 'none';
+          document.getElementById('login-page').style.display = 'flex';
+
+          // Reset Menu Aktif ke Home untuk sesi berikutnya
+          document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+          document.querySelectorAll('.content-area').forEach(p => p.classList.remove('active-page'));
+          window.top.location = window.top.location;
+    }
+
+    function getDashboardInfo() {
+      var ss = SpreadsheetApp.getActiveSpreadsheet();
+      var sheet = ss.getSheetByName("transaksi");
+      if (!sheet) return { income: 0, expense: 0, recent: [] };
+
+      var data = sheet.getDataRange().getValues();
+      var now = new Date();
+      var curMonth = now.getMonth(); // 0-11
+      var curYear = now.getFullYear();
+      
+      var income = 0;
+      var expense = 0;
+      var recentTx = [];
+      
+      // 1. Loop Data (Dari bawah ke atas agar dapat yang terbaru)
+      // Mulai dari baris terakhir, berhenti di baris 1 (Header)
+      var count = 0;
+      for (var i = data.length - 1; i >= 1; i--) {
+        var row = data[i];
+        
+        // Pastikan mapping kolom sesuai sheet Anda
+        var tgl = row[1];       // Kolom B: Tanggal
+        var jenis = row[2];     // Kolom C: Masuk/Keluar
+        var kategori = row[3];  // Kolom D
+        var nominal = row[4];   // Kolom E
+        var status = row[5];    // Kolom F
+        var nama = row[6];      // Kolom G (Nama User)
+        
+        // Hanya hitung yang statusnya Completed (Lunas)
+        if (status === "Completed") {
+          
+          // A. Hitung Statistik Bulan Ini
+          var tglObj = new Date(tgl);
+          if (tglObj.getMonth() === curMonth && tglObj.getFullYear() === curYear) {
+            if (jenis === "Masuk") income += nominal;
+            else if (jenis === "Keluar") expense += nominal;
+          }
+          
+          // B. Ambil 5 Transaksi Terakhir (Completed Only)
+          if (count < 5) {
+            recentTx.push({
+              nama: nama,
+              jenis: jenis,
+              kategori: kategori,
+              nominal: nominal,
+              tanggal: Utilities.formatDate(tglObj, "GMT+7", "dd MMM"),
+              waktu: Utilities.formatDate(tglObj, "GMT+7", "HH:mm")
+            });
+            count++;
+          }
+        }
+      }
+      
+      return {
+        income: income,
+        expense: expense,
+        recent: recentTx
+      };
+    }
+
+    function loadDashboardStats() {
+       google.script.run.withSuccessHandler(function(data) {
+          
+          // 1. Render Angka Statistik
+          var fmt = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 });
+          document.getElementById('dash-income').innerText = fmt.format(data.income);
+          document.getElementById('dash-expense').innerText = fmt.format(data.expense);
+          
+          // 2. Render List Aktivitas
+          var container = document.getElementById('recent-activity-list');
+          container.innerHTML = "";
+          
+          if (data.recent.length === 0) {
+             container.innerHTML = '<p style="text-align:center; font-size:11px; color:#999;">Belum ada aktivitas.</p>';
+             return;
+          }
+          
+          data.recent.forEach(function(item) {
+             var color = (item.jenis === "Masuk") ? "#2ecc71" : "#e74c3c"; // Hijau/Merah
+             var sign = (item.jenis === "Masuk") ? "+" : "-";
+             var icon = (item.jenis === "Masuk") ? "fa-arrow-down" : "fa-arrow-up"; // Masuk (Panah Bawah ke dompet), Keluar (Panah Atas)
+
+             var html = `
+               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; border-bottom:1px dashed #f0f0f0; padding-bottom:8px;">
+                  <div style="display:flex; align-items:center; gap:10px;">
+                     <div style="width:30px; height:30px; background:${color}20; border-radius:50%; display:flex; align-items:center; justify-content:center;">
+                        <i class="fas ${icon}" style="color:${color}; font-size:12px;"></i>
+                     </div>
+                     <div>
+                        <div style="font-size:12px; font-weight:600; color:#444;">${item.nama}</div>
+                        <div style="font-size:10px; color:#999;">${item.kategori} • ${item.tanggal}</div>
+                     </div>
+                  </div>
+                  <div style="text-align:right;">
+                     <div style="font-size:12px; font-weight:bold; color:${color};">${sign} ${parseInt(item.nominal).toLocaleString('id-ID')}</div>
+                     <div style="font-size:9px; color:#ccc;">${item.waktu}</div>
+                  </div>
+               </div>
+             `;
+             container.innerHTML += html;
+          });
+
+       }).getDashboardInfo();
+    }
+
+  </script>

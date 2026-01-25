@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <?!= include('style'); ?>
+</head>
+<body>
+
+  <div id="login-page">
+    <div class="login-card">
+      <?!= include('logo'); ?>
+      <p style="font-size:12px; color:#666;">Silakan Masukan Email dan Password Anda, Untuk Memulai Menggunakan Aplikasi Ini.</p>
+      <form id="formLogin" onsubmit="handleLogin(event)">
+        <p id="loginError" style="color:red; font-size:12px; display:none;"></p>
+        <input type="email" name="email" placeholder="Email" required>
+        <input type="password" name="password" placeholder="Password" required>
+        <button type="submit" id="btnLogin">Masuk</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="main-app">
+    <div class="header">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="font-size:12px; opacity:0.8;">Halo, <span id="userNameDisplay">User</span>!</div>
+          <h2 style="margin:0;">LuatLiat</h2>
+        </div>
+        <div class="role-badge" id="userRoleDisplay">MEMBER</div>
+      </div>
+    </div>
+
+    <div id="page-home" class="content-area active-page">
+      
+      <div class="saldo-card" style="margin-bottom:15px;">
+        <div style="font-size:12px; color:#666">Saldo Organisasi</div>
+        <div class="saldo-val" id="saldoDisplay">Loading...</div>
+      </div>
+
+      <div id="panel-monitor" style="margin-bottom:20px;">
+        
+        <div style="display:flex; gap:10px; margin-bottom:15px;">
+           <div style="flex:1; background:#fff; padding:10px; border-radius:10px; border-left:4px solid #2ecc71; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+              <div style="font-size:10px; color:#888;">Pemasukan (Bulan Ini)</div>
+              <div id="dash-income" style="font-size:14px; font-weight:bold; color:#2ecc71;">Rp 0</div>
+           </div>
+           <div style="flex:1; background:#fff; padding:10px; border-radius:10px; border-left:4px solid #e74c3c; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+              <div style="font-size:10px; color:#888;">Pengeluaran (Bulan Ini)</div>
+              <div id="dash-expense" style="font-size:14px; font-weight:bold; color:#e74c3c;">Rp 0</div>
+           </div>
+        </div>
+
+        <div style="background:#fff; border-radius:15px; padding:15px; box-shadow:0 5px 15px rgba(0,0,0,0.05);">
+           <h4 style="margin:0 0 10px 0; font-size:14px; color:#444; border-bottom:1px solid #eee; padding-bottom:5px;">
+             <i class="fas fa-history" style="color:#f39c12; margin-right:5px;"></i> Aktivitas Terakhir
+           </h4>
+           <div id="recent-activity-list">
+              <p style="text-align:center; font-size:11px; color:#ccc;">Memuat...</p>
+           </div>
+        </div>
+
+      </div>
+
+      <div id="form-input-container" style="background:#fff; padding:20px; border-radius:15px; margin-bottom:20px; box-shadow:0 5px 15px rgba(0,0,0,0.05);">
+          
+          <h4 style="margin-top:0; margin-bottom:15px; font-size:16px;">Input Transaksi</h4>
+
+          <form id="formTransaksi">
+            <div id="containerJenis" style="background:#fff; padding:5px; border-radius:10px; display:flex; margin-bottom:15px; border:1px solid #eee;">
+              <label style="flex:1; text-align:center;">
+                <input type="radio" id="masuk" name="jenis" value="Masuk" checked onclick="toggleInputMode()"> Masuk
+              </label>
+              <label id="lblKeluar" style="flex:1; text-align:center; border-left:1px solid #eee;">
+                <input type="radio" id="keluar" name="jenis" value="Keluar" onclick="toggleInputMode()"> Keluar
+              </label>
+            </div>
+
+            <label style="font-size:12px; font-weight:600; margin-left:5px;">Kategori</label>
+            <select name="kategori" id="catSelect" onchange="toggleInputMode()">
+              <option value="Iuran">Iuran Bulanan</option>
+              <option value="Donasi">Donasi / Sumbangan</option>
+              <option value="Lainnya">Lainnya</option>
+            </select>
+
+            <div id="input-iuran-box">
+              <div style="display:flex; justify-content:space-between; align-items:end; margin: 10px 5px 5px;">
+                <label style="font-size:12px; font-weight:600;">Pilih Bulan:</label>
+                <span id="totalBayarIuran" style="font-size:14px; font-weight:bold; color:#2ecc71;">Rp 0</span>
+              </div>
+              
+              <div class="month-container" id="monthGrid">
+                </div>
+            </div>
+
+            <div id="input-manual-box" style="display:none;">
+              <label style="font-size:12px; font-weight:600; margin-left:5px;">Nominal (Rp)</label>
+              <input type="number" name="jumlah" id="inpJumlah" placeholder="0">
+            </div>
+            
+            <input type="text" name="keterangan" id="inpKet" placeholder="Keterangan (Opsional)" style="margin-top:5px;">
+
+            <button type="button" onclick="kirimData()" id="btnSimpan" style="box-shadow: 0 5px 15px rgba(0,0,0,0.2);">Bayar Sekarang</button>
+            <p id="loading" style="display:none; text-align:center; font-size:12px;">Memproses...</p>
+          </form>
+      </div>
+    </div>
+
+    <div id="page-history" class="content-area">
+      <h3 style="margin-top:15px; font-size:14px;">Ringkasan Pemasukan</h3>
+      <div id="rekapContainer" class="rekap-scroll">
+        <p style="font-size:10px; color:#999; text-align:center;">Memuat data...</p>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; border-top:1px dashed #ddd; padding-top:20px;">
+        <h3 style="margin:0; font-size:14px;">Kartu Iuran Saya</h3>
+          <select id="tahunFilter" onchange="loadStatusIuran()" style="width:auto; margin:0; padding:5px; font-size:12px;">
+          </select>
+      </div>
+
+      <div class="status-grid" id="statusGridContainer">
+         <p>Memuat data...</p>
+      </div>
+      
+      <div style="margin-top:20px; font-size:11px; color:#666; display:flex; gap:15px; justify-content:center;">
+        <span><i class="fas fa-check-circle" style="color:#2ecc71"></i> Lunas</span>
+        <span><i class="fas fa-clock" style="color:#f39c12"></i> Menunggu Konfirmasi</span>
+        <span><i class="fas fa-times-circle" style="color:#ddd"></i> Belum Bayar</span>
+      </div>
+    </div>
+
+    <div id="page-approval" class="content-area">
+      <h3 style="margin-top:20px;">Konfirmasi Pembayaran</h3>
+      
+      <div class="search-wrapper">
+        <i class="fas fa-search"></i>
+        <input type="text" id="searchApproval" onkeyup="filterApproval()" placeholder="Cari nama atau nominal...">
+      </div>
+      
+      <div id="approval-list">
+        <p style="text-align:center; color:#999; margin-top:20px;">Mengecek antrian...</p>
+      </div>
+    </div>
+
+    <div id="page-profile" class="content-area">
+      <div class="stat-card" style="text-align: center;margin-top:15px;">
+        <div id="profileAvatar" style="width: 80px; height: 80px; background: #eee; border-radius: 50%; margin: 0 auto 15px; display: flex; align-items: center; justify-content: center; font-size: 30px;">
+          <i class="fas fa-user"></i>
+        </div>
+        <h3 id="profileName" style="margin-bottom: 5px;">User</h3>
+        <p id="profileRole" style="color:#888; font-size:12px; margin-top:0;text-transform: capitalize;">Member</p>
+        
+        <button onclick="handleGantiPassword()" style="background: #fff; color: var(--dark); border: 1px solid #ddd; padding: 10px 20px; border-radius: 20px; font-weight: 600; width:100%; margin-bottom:10px;">
+          <i class="fas fa-key"></i> Ganti Password
+        </button>
+
+        <button onclick="handleLogout()" style="background: #fff; color: var(--danger); border: 1px solid var(--danger); padding: 10px 20px; border-radius: 20px; font-weight: 600; width:100%;">
+          <i class="fas fa-sign-out-alt"></i> Log Out
+        </button>
+      </div>
+    </div>
+
+    <div class="bottom-nav">
+      <div class="nav-item active" onclick="switchTab('home', this)"><i class="fas fa-wallet"></i> Bayar</div>
+      
+      <div id="nav-approval" class="nav-item hidden" onclick="switchTab('approval', this)">
+        <i class="fas fa-check-double"></i> Approval
+      </div>
+      
+      <div class="nav-item" onclick="switchTab('history', this)"><i class="fas fa-th-large"></i> Kartu Iuran</div>
+      <div class="nav-item" onclick="switchTab('profile', this)"><i class="fas fa-user"></i> Akun</div>
+    </div>
+  </div>
+<?!= include('javascript'); ?>
+  
+</body>
+</html>
