@@ -91,9 +91,13 @@ const MOCK_SCRIPT = `
       switch(fn) {
         case 'cekLogin':
           var form = args[0];
-          if (form && form.email === 'demo@luatliat.com' && form.password === 'demo123') {
+          // Handle both form element and plain object
+          var email = form.email ? (form.email.value || form.email) : '';
+          var password = form.password ? (form.password.value || form.password) : '';
+          
+          if (email === 'demo@luatliat.com' && password === 'demo123') {
             successCb({ status: 'sukses', nama: 'Demo User', email: 'demo@luatliat.com', role: 'bendahara' });
-          } else if (form && form.email === 'admin@luatliat.com' && form.password === 'admin123') {
+          } else if (email === 'admin@luatliat.com' && password === 'admin123') {
             successCb({ status: 'sukses', nama: 'Admin', email: 'admin@luatliat.com', role: 'superadmin' });
           } else {
             successCb({ status: 'gagal', pesan: 'Email/Password salah atau akun tidak aktif.' });
